@@ -4,7 +4,7 @@
  * - Todo lo que sea de otro origen (señalización PeerJS, STUN) NO se toca.
  * Sube CACHE_VERSION para invalidar la caché en un despliegue.
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE = `vpt-${CACHE_VERSION}`;
 const SHELL = ['./', './index.html', './receiver.html', './manifest.webmanifest', './icons/icon-192.png'];
 

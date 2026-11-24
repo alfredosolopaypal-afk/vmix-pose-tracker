@@ -45,6 +45,8 @@
 - `overlay`: no hay llamada de video; solo viajan los tracks por DataChannel (~3 KB por mensaje con 4 personas) y el receptor dibuja con la misma función `drawOverlay`.
 El compositor solo dibuja si hay algún receptor `video` conectado.
 
+**Encuadre automático.** `core/autoframe.ts` calcula, a partir de los landmarks, la región de cada plano (cabeza→hombros, cabeza→cintura, cuerpo completo), la une para todas las personas y la convierte en un recorte **cuadrado en coordenadas normalizadas** (ancho = alto normalizados, así la proporción de la cámara no se deforma). `AutoFramer` suaviza el movimiento (zona muerta + suavizado exponencial) y vuelve a imagen completa si pierde a la persona. El recorte se aplica en el compositor (`drawImage` con rectángulo de origen) y `cropViewport` ajusta el viewport del overlay para que los gráficos coincidan, con y sin espejo. En modo *overlay* el recorte viaja en el mensaje de tracks (`cr`). Con el encuadre activo, "video limpio" sale de un segundo compositor sin overlay.
+
 **Un único código de render.** `core/render.ts` se usa en la pantalla del móvil, en el compositor y en el receptor. Las medidas escalan con el alto, por lo que se ve igual en todos.
 
 **Contrapresión y calidad adaptativa.** `PoseEngine.submit` envía un frame solo si no hay otro en vuelo y respeta el FPS objetivo. `AdaptiveQuality` ajusta el lado largo de la imagen del modelo con histéresis (baja rápido, sube despacio).
@@ -65,6 +67,7 @@ El compositor solo dibuja si hay algún receptor `video` conectado.
 | `core/adaptive.ts` | Escalera de resolución con histéresis |
 | `core/protocol.ts` | Modos, codificación compacta de tracks, ID del enlace, URLs |
 | `core/peer-config.ts` | Opciones de PeerJS sin relés |
+| `core/autoframe.ts` | Planos, recorte suave y mapeo del overlay al recorte |
 | `core/render.ts` | Esqueleto, IDs, métricas; cálculo del viewport |
 | `workers/pose.worker.ts` | MediaPipe en worker; GPU → CPU automático |
 | `sender/pose-engine.ts` | Captura reducida, envío al worker, tracker, estadísticas |

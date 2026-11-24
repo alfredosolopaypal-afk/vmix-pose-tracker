@@ -1,4 +1,5 @@
 import Peer, { type DataConnection, type MediaConnection } from 'peerjs';
+import { cropViewport } from '../core/autoframe';
 import { buildPeerOptions } from '../core/peer-config';
 import {
   decodeTracks,
@@ -21,6 +22,8 @@ import './receiver.css';
  *   fit       contain | cover | stretch
  *   bg        transparent | hex sin '#' (p. ej. 00ff00 para croma)
  *   skeleton, points, ids, metrics, bbox  = 0|1   (solo modo overlay)
+ *   crop      0 = ignora el encuadre automático del emisor (solo modo overlay): úsalo si la capa
+ *             se superpone a una cámara SIN recortar. Por defecto el overlay sigue el recorte.
  *   debug=1   muestra el estado de la conexión sobre la imagen
  *   stun=1, peerHost, peerPort, peerPath, peerSecure   (red / señalización)
  */
@@ -45,6 +48,8 @@ const overlayOpts: OverlayOptions = {
   metrics: flag('metrics', true),
   mirror: false,
 };
+
+const followCrop = params.get('crop') !== '0';
 
 const video = document.getElementById('v') as HTMLVideoElement;
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -199,8 +204,10 @@ function drawOverlayFrame(): void {
   if (!ctx || !lastMsg || mode !== 'overlay') return;
   sizeCanvas();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const vp = fitViewport(lastMsg.w, lastMsg.h, canvas.width, canvas.height, fit);
-  drawOverlay(ctx, vp, lastMsg.tracks, { ...overlayOpts, mirror: lastMsg.mirror });
+  const visible = fitViewport(lastMsg.w, lastMsg.h, canvas.width, canvas.height, fit);
+  const crop = followCrop ? lastMsg.crop : null;
+  const vp = crop ? cropViewport(crop, visible, lastMsg.mirror) : visible;
+  drawOverlay(ctx, vp, lastMsg.tracks, { ...overlayOpts, mirror: lastMsg.mirror }, visible);
 }
 
 window.addEventListener('resize', drawOverlayFrame);

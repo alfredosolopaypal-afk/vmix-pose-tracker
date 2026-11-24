@@ -1,5 +1,6 @@
 import '../style.css';
 import { STREAM_ID_KEY } from '../config';
+import { AutoFramer, FRAME_MODES, FULL_CROP, isFullCrop, type Crop, type FrameMode } from '../core/autoframe';
 import { buildPeerOptions } from '../core/peer-config';
 import {
   MODES,
@@ -60,6 +61,10 @@ let camera: CameraHandle | null = null;
 let engine: PoseEngine | null = null;
 let hub: StreamHub | null = null;
 const compositor = new Compositor();
+/** Segundo compositor: imagen recortada y sin gráficos, para el enlace "video limpio" con encuadre activo. */
+const cleanCompositor = new Compositor();
+const framer = new AutoFramer(settings.frameMode);
+let currentCrop: Crop = FULL_CROP;
 
 let tracks: Track[] = [];
 let stats: EngineStats | null = null;
@@ -158,8 +163,9 @@ async function openCamera(): Promise<void> {
   });
 
   engine?.resetTracking();
+  framer.reset();
   tracks = [];
-  hub?.replaceRawTrack(next.track);
+  hub?.refreshRaw();
 }
 
 function scheduleCameraRestart(): void {
@@ -193,6 +199,7 @@ function createEngine(): PoseEngine {
     onTracks: (t, s) => {
       tracks = t;
       stats = s;
+      framer.update(t, performance.now());
       if (hub?.wantsTracks() && video.videoWidth > 0) {
         hub.broadcastTracks(
           encodeTracks(t, {
@@ -200,6 +207,7 @@ function createEngine(): PoseEngine {
             w: video.videoWidth,
             h: video.videoHeight,
             mirror: settings.mirrorOutput,
+            crop: currentCrop,
           }),
         );
       }
@@ -214,7 +222,8 @@ function createHub(): StreamHub {
   return new StreamHub({
     id: streamId,
     peerOptions: buildPeerOptions(signalingForLinks()),
-    getRawStream: () => camera?.stream ?? null,
+    // Con encuadre activo, "video limpio" sale del canvas recortado; sin él, directo de la cámara.
+    getRawStream: () => (settings.frameMode !== 'off' ? cleanCompositor.getStream(30) : (camera?.stream ?? null)),
     getComposedStream: () => compositor.getStream(30),
     onStatus: (s) => {
       hubStatus = s;
@@ -241,10 +250,15 @@ function scheduleNext(): void {
 
 function onFrame(): void {
   if (!running) return;
-  engine?.submit(video, performance.now());
-  drawDisplay();
+  const now = performance.now();
+  engine?.submit(video, now);
+  currentCrop = framer.step(now);
+  drawDisplay(currentCrop);
   if (hub?.wantsComposed()) {
-    compositor.draw(video, tracks, overlayOptions(settings.mirrorOutput), settings.outLong, settings.mirrorOutput);
+    compositor.draw(video, tracks, overlayOptions(settings.mirrorOutput), currentCrop, settings.outLong, settings.mirrorOutput);
+  }
+  if (settings.frameMode !== 'off' && hub?.wantsRaw()) {
+    cleanCompositor.draw(video, tracks, null, currentCrop, settings.outLong, settings.mirrorOutput);
   }
   scheduleNext();
 }
@@ -260,13 +274,35 @@ function resizeCanvasIfNeeded(): void {
   overlay.height = Math.max(1, Math.round(cssH * dpr));
 }
 
-function drawDisplay(): void {
+function drawDisplay(crop: Crop): void {
   if (!ctx) return;
   resizeCanvasIfNeeded();
   ctx.clearRect(0, 0, overlay.width, overlay.height);
-  if (video.videoWidth === 0 || tracks.length === 0) return;
+  if (video.videoWidth === 0) return;
   const vp = fitViewport(video.videoWidth, video.videoHeight, overlay.width, overlay.height, 'contain');
-  drawOverlay(ctx, vp, tracks, overlayOptions(camera?.facing === 'user'));
+  const mirror = camera?.facing === 'user';
+  if (tracks.length > 0) drawOverlay(ctx, vp, tracks, overlayOptions(mirror));
+  if (!isFullCrop(crop)) drawFrameGuide(ctx, vp, crop, mirror);
+}
+
+/** Recuadro punteado: la parte de la imagen que recibe vMix con el encuadre automático. */
+function drawFrameGuide(c: CanvasRenderingContext2D, vp: { x: number; y: number; w: number; h: number }, crop: Crop, mirror: boolean): void {
+  const x = vp.x + (mirror ? 1 - (crop.x + crop.s) : crop.x) * vp.w;
+  const y = vp.y + crop.y * vp.h;
+  const w = crop.s * vp.w;
+  const h = crop.s * vp.h;
+  const u = Math.max(vp.h, 240) / 720;
+  c.save();
+  c.fillStyle = 'rgba(0,0,0,0.38)';
+  c.beginPath();
+  c.rect(vp.x, vp.y, vp.w, vp.h);
+  c.rect(x, y, w, h);
+  c.fill('evenodd'); // oscurece lo que queda fuera del encuadre
+  c.strokeStyle = 'rgba(255,255,255,0.9)';
+  c.lineWidth = Math.max(1.5, 2 * u);
+  c.setLineDash([10 * u, 7 * u]);
+  c.strokeRect(x, y, w, h);
+  c.restore();
 }
 
 // -----------------------------------------------------------------------------
@@ -408,7 +444,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeSheets();
 });
 
-function bindSelect<K extends 'camRes' | 'maxPoses' | 'targetFps' | 'outLong'>(
+function bindSelect<K extends 'camRes' | 'maxPoses' | 'targetFps' | 'outLong' | 'frameMode'>(
   id: string,
   key: K,
   parse: (v: string) => Settings[K],
@@ -438,6 +474,11 @@ function bindCheck(
 }
 
 function bindSettings(): void {
+  bindSelect('set-frame', 'frameMode', (v) => (FRAME_MODES as readonly string[]).includes(v) ? (v as FrameMode) : 'off', () => {
+    framer.setMode(settings.frameMode);
+    currentCrop = framer.crop;
+    hub?.refreshRaw(); // el enlace "video limpio" cambia de fuente (cámara directa <-> canvas recortado)
+  });
   bindSelect('set-cam-res', 'camRes', (v) => v as CamRes, () => {
     openCamera().catch((err) => toast(err instanceof CameraError ? err.message : 'No se pudo aplicar la resolución.'));
   });

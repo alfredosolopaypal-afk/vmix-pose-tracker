@@ -68,8 +68,11 @@ export function drawOverlay(
   vp: Viewport,
   tracks: readonly Track[],
   opts: OverlayOptions,
+  visible: Viewport = vp,
 ): void {
-  const unit = Math.max(vp.h, 240) / 720; // 1.0 a 720p de alto
+  // `vp` es donde caería el frame completo (puede salirse del lienzo si hay zoom);
+  // `visible` es el área realmente visible: recorta el dibujo, ancla las etiquetas y fija el grosor.
+  const unit = Math.max(visible.h, 240) / 720; // 1.0 a 720p de alto
   const lineW = Math.max(2, 3.5 * unit);
   const dotR = Math.max(2.5, 4 * unit);
   const font = Math.max(12, Math.round(18 * unit));
@@ -77,6 +80,9 @@ export function drawOverlay(
   const py = (ny: number) => vp.y + ny * vp.h;
 
   ctx.save();
+  ctx.beginPath();
+  ctx.rect(visible.x, visible.y, visible.w, visible.h);
+  ctx.clip();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.textBaseline = 'middle';
@@ -147,8 +153,8 @@ export function drawOverlay(
       const topY = py(tr.bbox.y);
       let bx = anchorX - boxW / 2;
       let by = topY - boxH - 8 * unit;
-      bx = Math.min(Math.max(bx, vp.x + 4), vp.x + vp.w - boxW - 4);
-      by = Math.max(by, vp.y + 4);
+      bx = Math.min(Math.max(bx, visible.x + 4), visible.x + visible.w - boxW - 4);
+      by = Math.min(Math.max(by, visible.y + 4), visible.y + visible.h - boxH - 4);
 
       ctx.fillStyle = 'rgba(8,10,14,0.72)';
       roundRect(ctx, bx, by, boxW, boxH, boxH / 2);

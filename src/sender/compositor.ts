@@ -1,9 +1,11 @@
+import { cropViewport, type Crop } from '../core/autoframe';
 import { drawOverlay, type OverlayOptions } from '../core/render';
 import type { Track } from '../core/types';
 
 /**
- * Compone cámara + overlay en un canvas y lo expone como MediaStream (captureStream).
- * Es lo que recibe vMix en modo "video". Solo se dibuja mientras haya algún receptor conectado.
+ * Compone cámara (con recorte opcional del encuadre automático) + overlay en un canvas
+ * y lo expone como MediaStream (captureStream). Es lo que recibe vMix en los modos "video" y,
+ * con el encuadre activo, también "raw" (sin overlay). Solo se dibuja mientras haya receptores.
  */
 export class Compositor {
   private readonly canvas = document.createElement('canvas');
@@ -22,10 +24,15 @@ export class Compositor {
     return this.stream;
   }
 
+  /**
+   * @param overlay Opciones de dibujo, o `null` para emitir la imagen limpia (solo recortada).
+   * @param crop    Recorte del encuadre automático (lado cuadrado normalizado; conserva la proporción).
+   */
   draw(
     video: HTMLVideoElement,
     tracks: readonly Track[],
-    overlay: OverlayOptions,
+    overlay: OverlayOptions | null,
+    crop: Crop,
     outLong: number,
     mirrorOutput: boolean,
   ): void {
@@ -47,14 +54,12 @@ export class Compositor {
       ctx.translate(w, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, 0, 0, w, h);
+    ctx.drawImage(video, crop.x * vw, crop.y * vh, crop.s * vw, crop.s * vh, 0, 0, w, h);
     ctx.restore();
 
-    drawOverlay(ctx, { x: 0, y: 0, w, h }, tracks, { ...overlay, mirror: mirrorOutput });
-  }
-
-  /** Lado largo actual del canvas, útil para elegir el bitrate. */
-  get longSide(): number {
-    return Math.max(this.canvas.width, this.canvas.height);
+    if (overlay) {
+      const visible = { x: 0, y: 0, w, h };
+      drawOverlay(ctx, cropViewport(crop, visible, mirrorOutput), tracks, { ...overlay, mirror: mirrorOutput }, visible);
+    }
   }
 }

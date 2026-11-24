@@ -4,6 +4,7 @@ PWA que usa la cámara del móvil para **detectar y rastrear personas (pose corp
 
 - Procesamiento **100 % local** en el móvil (MediaPipe Pose Landmarker en un Web Worker). Ningún fotograma se sube a servidores.
 - 15–30 FPS con **resolución de inferencia adaptable**.
+- **Encuadre automático** (zoom digital que sigue a la persona): primer plano, medio cuerpo o cuerpo completo.
 - Seguimiento multi-persona con **IDs estables**, suavizado One Euro y métricas: velocidad, dirección, tiempo en pantalla y manos levantadas.
 - Tres salidas por enlace: **video con overlay**, **solo overlay transparente** y **video limpio**.
 - Se despliega como sitio estático (GitHub Pages / Netlify). Sin backend propio.
@@ -55,9 +56,29 @@ https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_
 | `fit` | `contain` (def.), `cover`, `stretch` | Cómo se ajusta la imagen al tamaño de la fuente |
 | `bg` | `transparent`, o hex sin `#` (`00ff00`) | Color de fondo (croma, p. ej.) |
 | `skeleton`, `points`, `ids`, `metrics`, `bbox` | `0` / `1` | Qué dibujar (solo modo *overlay*) |
+| `crop` | `0` | Solo modo *overlay*: ignora el encuadre automático (úsalo si la capa va sobre una cámara sin recortar) |
 | `debug` | `1` | Muestra el estado de la conexión sobre la imagen |
 
 Ejemplo: `…/receiver.html?id=vpt-xxxx&mode=overlay&ids=0&bbox=1`
+
+### Encuadre automático (zoom)
+
+En el móvil: **Ajustes → Encuadre automático**.
+
+| Opción | Qué encuadra |
+|---|---|
+| Desactivado | Imagen completa de la cámara |
+| Primer plano | Cabeza y hombros |
+| Medio cuerpo | Cabeza a cintura |
+| Cuerpo completo | De la cabeza a los pies |
+
+- Es **zoom digital**: recorta y amplía la imagen, así que pierde algo de nitidez. Usa la cámara en **1080p** (Ajustes → Resolución de cámara) y el video emitido en 720p o 1080p.
+- La detección sigue usando la imagen completa; solo cambia lo que se emite.
+- El movimiento del recorte es suave y, si pierde a la persona, mantiene el plano 2 segundos y vuelve a la imagen completa.
+- Con **varias personas** encuadra a todas juntas.
+- En la pantalla del móvil ves la **imagen completa** con un recuadro punteado: eso es lo que recibe vMix.
+- Se aplica a los tres enlaces. En el modo *overlay* los gráficos siguen el recorte; si los superpones a una cámara que no está recortada, añade `&crop=0` a la URL.
+- Límite: el zoom máximo es 4×. Si la persona está muy lejos, el plano cerrado no llegará a ser tan cerrado.
 
 ### Requisitos de red
 

@@ -1,4 +1,5 @@
 import { SETTINGS_KEY } from '../config';
+import { FRAME_MODES, type FrameMode } from '../core/autoframe';
 import type { SignalingParams } from '../core/protocol';
 
 export type Facing = 'user' | 'environment';
@@ -11,6 +12,8 @@ export interface Settings {
   targetFps: number;
   /** Lado largo (px) del vídeo emitido en modo "video". */
   outLong: number;
+  /** Encuadre automático (zoom digital que sigue a la persona). */
+  frameMode: FrameMode;
   skeleton: boolean;
   points: boolean;
   bbox: boolean;
@@ -27,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxPoses: 2,
   targetFps: 30,
   outLong: 1280,
+  frameMode: 'off',
   skeleton: true,
   points: true,
   bbox: false,
@@ -57,6 +61,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     maxPoses: oneOf(r.maxPoses, [1, 2, 3, 4] as const, d.maxPoses as 2),
     targetFps: oneOf(r.targetFps, [15, 24, 30] as const, d.targetFps as 30),
     outLong: oneOf(r.outLong, [960, 1280, 1920] as const, d.outLong as 1280),
+    frameMode: oneOf(r.frameMode, FRAME_MODES, d.frameMode),
     skeleton: bool(r.skeleton, d.skeleton),
     points: bool(r.points, d.points),
     bbox: bool(r.bbox, d.bbox),

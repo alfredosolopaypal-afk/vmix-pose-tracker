@@ -53,6 +53,22 @@ describe('protocolo', () => {
     expect(size).toBeLessThan(12_000);
   });
 
+  it('el recorte del encuadre viaja en el mensaje y se omite si es imagen completa', () => {
+    const t = new PoseTracker();
+    t.update([makePose(0.5, 0.5)], 0);
+    const tracks = t.update([makePose(0.5, 0.5)], 33);
+    const meta = { ts: 0, w: 1280, h: 720, mirror: false };
+
+    const zoomed = JSON.parse(JSON.stringify(encodeTracks(tracks, { ...meta, crop: { x: 0.31234, y: 0.1, s: 0.5 } })));
+    expect(zoomed.cr).toEqual([0.3123, 0.1, 0.5]);
+    expect(decodeTracks(zoomed).crop).toEqual({ x: 0.3123, y: 0.1, s: 0.5 });
+
+    const full = JSON.parse(JSON.stringify(encodeTracks(tracks, { ...meta, crop: { x: 0, y: 0, s: 1 } })));
+    expect('cr' in full).toBe(false);
+    expect(decodeTracks(full).crop).toBeNull();
+    expect(decodeTracks({ ...full, cr: [0, 0, 'x'] }).crop).toBeNull();
+  });
+
   it('isTracksMessage rechaza basura', () => {
     expect(isTracksMessage(null)).toBe(false);
     expect(isTracksMessage({ t: 'otra' })).toBe(false);

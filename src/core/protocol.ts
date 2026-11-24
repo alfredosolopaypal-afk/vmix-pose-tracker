@@ -1,3 +1,4 @@
+import type { Crop } from './autoframe';
 import type { Landmark, Track } from './types';
 
 /**
@@ -47,6 +48,8 @@ export interface TracksMessage {
   h: number;
   /** Si las coordenadas deben espejarse al dibujar. */
   mirror: boolean;
+  /** Recorte del encuadre automático [x, y, lado]. Ausente = imagen completa. */
+  cr?: [number, number, number];
   tracks: WireTrack[];
 }
 
@@ -55,14 +58,16 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 
 export function encodeTracks(
   tracks: readonly Track[],
-  meta: { ts: number; w: number; h: number; mirror: boolean },
+  meta: { ts: number; w: number; h: number; mirror: boolean; crop?: Crop | null },
 ): TracksMessage {
+  const c = meta.crop;
   return {
     t: 'tracks',
     ts: Math.round(meta.ts),
     w: meta.w,
     h: meta.h,
     mirror: meta.mirror,
+    ...(c && c.s < 0.995 ? { cr: [r4(c.x), r4(c.y), r4(c.s)] as [number, number, number] } : {}),
     tracks: tracks.map((tr) => {
       const lm: number[] = [];
       for (const p of tr.landmarks) lm.push(r4(p.x), r4(p.y), Math.round(p.v * 100));
@@ -85,7 +90,13 @@ export function isTracksMessage(msg: unknown): msg is TracksMessage {
   return m.t === 'tracks' && Array.isArray(m.tracks) && typeof m.w === 'number' && typeof m.h === 'number';
 }
 
-export function decodeTracks(msg: TracksMessage): { tracks: Track[]; w: number; h: number; mirror: boolean } {
+export function decodeTracks(msg: TracksMessage): {
+  tracks: Track[];
+  w: number;
+  h: number;
+  mirror: boolean;
+  crop: Crop | null;
+} {
   const tracks: Track[] = msg.tracks.map((wt) => {
     const landmarks: Landmark[] = [];
     for (let i = 0; i + 2 < wt.lm.length; i += 3) {
@@ -103,7 +114,12 @@ export function decodeTracks(msg: TracksMessage): { tracks: Track[]; w: number; 
       handsRaised: { left: wt.hr[0] === 1, right: wt.hr[1] === 1 },
     };
   });
-  return { tracks, w: msg.w, h: msg.h, mirror: msg.mirror };
+  const cr = msg.cr;
+  const crop: Crop | null =
+    Array.isArray(cr) && cr.length === 3 && cr.every((n) => Number.isFinite(n)) && (cr[2] as number) > 0.04
+      ? { x: cr[0] as number, y: cr[1] as number, s: Math.min(1, cr[2] as number) }
+      : null;
+  return { tracks, w: msg.w, h: msg.h, mirror: msg.mirror, crop };
 }
 
 // --- Identificador del enlace ------------------------------------------------

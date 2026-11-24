@@ -98,6 +98,12 @@ export class StreamHub {
     return false;
   }
 
+  /** ¿Algún receptor pide la imagen limpia? */
+  wantsRaw(): boolean {
+    for (const e of this.entries.values()) if (e.mode === 'raw') return true;
+    return false;
+  }
+
   /** ¿Algún receptor necesita datos de tracking? */
   wantsTracks(): boolean {
     for (const e of this.entries.values()) if (e.mode === 'overlay') return true;
@@ -113,8 +119,13 @@ export class StreamHub {
     }
   }
 
-  /** Tras cambiar de cámara: sustituye la pista de vídeo de las llamadas en modo "raw". */
-  replaceRawTrack(track: MediaStreamTrack): void {
+  /**
+   * Vuelve a leer la fuente "raw" (cámara directa o canvas recortado) y sustituye la pista
+   * de las llamadas en curso. Se usa al cambiar de cámara o de plano de encuadre.
+   */
+  refreshRaw(): void {
+    const track = this.opts.getRawStream()?.getVideoTracks()[0];
+    if (!track) return;
     for (const e of this.entries.values()) {
       if (e.mode !== 'raw' || !e.call) continue;
       const sender = e.call.peerConnection?.getSenders().find((s) => s.track?.kind === 'video');
