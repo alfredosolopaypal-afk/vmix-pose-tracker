@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f14" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Pose vMix" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Detecta y rastrea personas con la cámara del móvil, 100% local, y emite un enlace para usarlo como fuente en vMix." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <title>Pose Tracker → vMix</title>
+  </head>
+  <body>
+    <main id="app">
+      <div id="stage">
+        <video id="video" playsinline muted autoplay></video>
+        <canvas id="overlay"></canvas>
+      </div>
+
+      <!-- Pantalla inicial: necesaria para pedir el permiso de cámara con un gesto del usuario -->
+      <section id="start" class="screen">
+        <div class="start-card">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="56" height="56" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="32" cy="11" r="6" />
+              <path d="M32 19v18M32 25l-13 8M32 25l13 8M32 37l-10 17M32 37l10 17" />
+            </svg>
+          </div>
+          <h1>Pose Tracker <span class="arrow">→</span> vMix</h1>
+          <p class="lead">Detecta personas con la cámara del móvil y emite un enlace que pegas como fuente <strong>Web Browser</strong> en vMix.</p>
+          <ul class="points">
+            <li>El video se procesa <strong>en este dispositivo</strong>.</li>
+            <li>Solo se envía a tu vMix, directo por WebRTC en tu red.</li>
+            <li>Usa el móvil en <strong>horizontal</strong> para un video 16:9.</li>
+          </ul>
+          <button id="btn-start" class="btn primary" type="button">Iniciar cámara</button>
+          <p id="start-msg" class="msg" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <header id="hud" class="hud" hidden>
+        <span class="chip" id="chip-fps" title="Inferencias por segundo / milisegundos">-- fps</span>
+        <span class="chip" id="chip-res" title="Resolución de inferencia">--</span>
+        <span class="chip" id="chip-ppl" title="Personas detectadas">0 pers.</span>
+        <span class="chip" id="chip-link" title="Estado del enlace">Enlace…</span>
+      </header>
+
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+      <nav id="controls" class="controls" hidden aria-label="Controles">
+        <button id="btn-flip" class="ctl" type="button" aria-label="Cambiar cámara">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><path d="M9.5 13a2.5 2.5 0 0 1 4.3-1.7M14.5 13a2.5 2.5 0 0 1-4.3 1.7"/></svg>
+          <span>Girar</span>
+        </button>
+        <button id="btn-link" class="ctl accent" type="button" aria-label="Enlace para vMix">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+          <span>Enlace vMix</span>
+        </button>
+        <button id="btn-settings" class="ctl" type="button" aria-label="Ajustes">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          <span>Ajustes</span>
+        </button>
+        <button id="btn-full" class="ctl" type="button" aria-label="Pantalla completa">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+          <span>Pantalla</span>
+        </button>
+      </nav>
+
+      <!-- Hoja: enlaces para vMix -->
+      <section id="sheet-link" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="link-title">
+        <div class="sheet-backdrop" data-close></div>
+        <div class="sheet-panel">
+          <div class="sheet-head">
+            <h2 id="link-title">Enlace para vMix</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Cerrar">✕</button>
+          </div>
+          <p class="hint">En vMix: <strong>Add Input → Web Browser</strong> y pega la URL. Mantén esta pantalla abierta mientras transmites.</p>
+          <p id="link-status" class="status-line"></p>
+          <div id="link-list" class="link-list"></div>
+          <div class="row">
+            <button id="btn-rotate" class="btn subtle" type="button">Generar enlace nuevo</button>
+          </div>
+          <p class="hint small">El enlace es privado: quien lo tenga puede conectarse a esta cámara. Genera uno nuevo si lo compartiste por error.</p>
+        </div>
+      </section>
+
+      <!-- Hoja: ajustes -->
+      <section id="sheet-settings" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="set-title">
+        <div class="sheet-backdrop" data-close></div>
+        <div class="sheet-panel">
+          <div class="sheet-head">
+            <h2 id="set-title">Ajustes</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Cerrar">✕</button>
+          </div>
+
+          <div class="field">
+            <label for="set-cam-res">Resolución de cámara</label>
+            <select id="set-cam-res">
+              <option value="auto">Auto (720p)</option>
+              <option value="480">480p</option>
+              <option value="720">720p</option>
+              <option value="1080">1080p</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="set-poses">Personas a rastrear</label>
+            <select id="set-poses">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="set-fps">FPS objetivo del tracking</label>
+            <select id="set-fps">
+              <option value="15">15</option>
+              <option value="24">24</option>
+              <option value="30">30</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="set-out">Resolución del video emitido</label>
+            <select id="set-out">
+              <option value="960">540p</option>
+              <option value="1280">720p</option>
+              <option value="1920">1080p</option>
+            </select>
+          </div>
+
+          <h3>Overlay</h3>
+          <label class="check"><input type="checkbox" id="set-skeleton" /> Esqueleto</label>
+          <label class="check"><input type="checkbox" id="set-points" /> Articulaciones</label>
+          <label class="check"><input type="checkbox" id="set-ids" /> ID de cada persona</label>
+          <label class="check"><input type="checkbox" id="set-metrics" /> Métricas (velocidad, dirección)</label>
+          <label class="check"><input type="checkbox" id="set-bbox" /> Caja contenedora</label>
+          <label class="check"><input type="checkbox" id="set-mirror-out" /> Espejar el video emitido</label>
+
+          <h3>Red</h3>
+          <label class="check"><input type="checkbox" id="set-stun" /> Permitir conexión fuera de la red local (STUN)</label>
+          <p class="hint small">Desactivado, el video solo viaja por tu red local y nunca sale a internet. Actívalo solo si el móvil y vMix están en redes distintas. Los receptores deben usar un enlace generado con la misma opción.</p>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/sender/main.ts"></script>
+    <noscript>Esta aplicación necesita JavaScript.</noscript>
+  </body>
+</html>
